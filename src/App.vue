@@ -1,11 +1,16 @@
 <script setup>
-import HelloWorld from './components/HelloWorld.vue';
-import { ref, watchEffect, onMounted } from "vue";
+import WeatherCard from './components/WeatherCard.vue';
+import { ref, watchEffect } from "vue";
 import { useWeather } from "./api/weather";
 
-const query = "cape town";
+const query = '';
 
 const weatherData = ref(null);
+const filteredCities = () => {
+  return this.cities.filter((city) =>
+    city.name.toLowerCase().includes(this.query.toLowerCase())
+  );
+};
 const fetchWeather = async () => {
   try {
     const data = await useWeather(query);
@@ -20,6 +25,7 @@ fetchWeather();
 watchEffect(() => {
   if (weatherData.value) {
     console.log("Weather data:", weatherData.value);
+    console.log("Weather data NAME:", weatherData.value.city.name);
   } else {
     console.error("Could not fetch data");
   }
@@ -29,14 +35,11 @@ watchEffect(() => {
 
 <template>
   <div>
-    <div class="weather-card">
+    <input type="text" v-model="query" />
+    <button @click="filteredCities()">Filter Cities</button>
+    <button @click="fetchWeather()">Fetch Weather</button>
+/>
 
-      <h1>{{weatherData.name}}</h1>
-      <p>Temperature: {{weatherData.main.temp}}°C</p>
-      <p>Description: {{weatherData.weather[0].description}}</p>
-      <p>Humidity: {{weatherData.main.humidity}}%</p>
-      <p>Wind Speed: {{weatherData.wind.speed}} m/s</p>
-    </div>
     </div>
 </template>
 
