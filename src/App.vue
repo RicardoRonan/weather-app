@@ -50,7 +50,7 @@ watchEffect(() => {
     </div>
     <input type="text" v-model="query" @keypress="search"  placeholder="Search Weather..."/>
     <div class="card-container">
-    <div v-if="filteredData" class="weather-card">
+    <div v-if="filteredData.length != 0" class="weather-card">
       <h1>{{filteredData.name}}</h1>
       <p>Temperature: {{filteredData.main.temp}}°C</p>
       <p>Description: {{filteredData.weather[0].description}}</p>
