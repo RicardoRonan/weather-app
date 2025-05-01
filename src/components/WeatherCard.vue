@@ -1,12 +1,13 @@
 <script setup>
-import { ref } from "vue";
+import { ref,  watchEffect } from "vue";
 import { useWeather } from "../api/weather";
-
+const query = ref("");
+const filteredData = ref([]);
+const capeTownWeatherData = ref();
 defineProps({
   msg: String,
 });
 
-const capeTownWeatherData = ref();
 
 const fetchWeather = async () => {
   try {
@@ -19,27 +20,79 @@ const fetchWeather = async () => {
   }
 };
 fetchWeather();
+
+const search = async (e) => {
+  if (e.key === "Enter") {
+    const input = query.value.trim();
+
+    if (!input) {
+      console.log("Search query is empty.");
+      return;
+    }
+
+    try {
+      const data = await useWeather(input);
+      filteredData.value = data;
+      console.log("Searched Weather data:", filteredData.value);
+    } catch (error) {
+      console.error("Error fetching searched weather data:", error);
+    }
+  }
+};
+
+watchEffect(() => {
+  if (filteredData.value) {
+    console.log("Weather data:", filteredData.value);
+  } else {
+    console.error("Could not fetch data");
+  }
+});
+
 </script>
 
 <template>
-    
   <div v-if="capeTownWeatherData">
     <div class="card-container">
       <div class="weather-card">
         <div id="homepage-graphic-div">
-      <img id="homepage-graphic" alt="girl-sitting-on-cloud-holding-sun" src="../assets/undraw_weather-app_4cp0.svg">
-    </div>
-        <h1>{{ capeTownWeatherData.name }}</h1>
+          <img
+            id="homepage-graphic"
+            alt="girl-sitting-on-cloud-holding-sun"
+            src="../assets/undraw_weather-app_4cp0.svg"
+          />
+        </div>
+        <h1 class="btn">{{ capeTownWeatherData.name }}</h1>
         <p>Temperature: {{ capeTownWeatherData.main.temp }}°C</p>
-        <div v-if="capeTownWeatherData.weather[0].description.toLowerCase().includes('cloudy')"></div>
+        <div
+          v-if="
+            capeTownWeatherData.weather[0].description
+              .toLowerCase()
+              .includes('cloudy')
+          "
+        ></div>
         <p>Description: {{ capeTownWeatherData.weather[0].description }}</p>
         <p>Humidity: {{ capeTownWeatherData.main.humidity }}%</p>
         <p>Wind Speed: {{ capeTownWeatherData.wind.speed }} m/s</p>
       </div>
+      <input
+        type="text"
+        v-model="query"
+        @keypress="search"
+        placeholder="Search Weather..."
+      />
+  
     </div>
+    <div class="card-container">
+        <div v-if="filteredData.length != 0" class="weather-card">
+          <h1>{{ filteredData.name }}</h1>
+          <p>Temperature: {{ filteredData.main.temp }}°C</p>
+          <p>Description: {{ filteredData.weather[0].description }}</p>
+          <p>Humidity: {{ filteredData.main.humidity }}%</p>
+          <p>Wind Speed: {{ filteredData.wind.speed }} m/s</p>
+        </div>
+      </div>
   </div>
 </template>
-
 <style scoped>
 .card-container {
   color: white;
