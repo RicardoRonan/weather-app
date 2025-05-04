@@ -1,9 +1,11 @@
 <script setup>
-import { ref,  watchEffect } from "vue";
+import { ref, watch } from "vue";
 import { useWeather } from "../api/weather";
 const query = ref("");
-const filteredData = ref([]);
 const capeTownWeatherData = ref();
+const suggestions = ref([]);
+const showSuggestions = ref(false);
+const searchedCitiesWeather = ref([]);
 defineProps({
   msg: String,
 });
@@ -20,33 +22,93 @@ const fetchWeather = async () => {
   }
 };
 fetchWeather();
-
-const search = async (e) => {
-  if (e.key === "Enter") {
-    const input = query.value.trim();
-
-    if (!input) {
-      console.log("Search query is empty.");
-      return;
+function debounce(fn, delay) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+}
+const searchCities = async (input) => {
+  const trimmed = input.trim();
+  if (!trimmed) return [];
+  
+  try {
+    const data = await useWeather(trimmed);
+    if (data && data.name) {
+      // Return as an array of city objects
+      return [{
+        id: data.id,
+        name: data.name,
+        country: data.sys?.country
+      }];
     }
-
-    try {
-      const data = await useWeather(input);
-      filteredData.value = data;
-      console.log("Searched Weather data:", filteredData.value);
-    } catch (error) {
-      console.error("Error fetching searched weather data:", error);
-    }
+    return [];
+  } catch (error) {
+    console.error("Error searching cities:", error);
+    return [];
   }
 };
 
-watchEffect(() => {
-  if (filteredData.value) {
-    console.log("Weather data:", filteredData.value);
-  } else {
-    console.error("Could not fetch data");
+// Fetch city suggestions as user types
+const fetchCitySuggestions = async (input) => {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    suggestions.value = [];
+    showSuggestions.value = false;
+    return;
   }
+  
+  try {
+    const cities = await searchCities(trimmed);
+    suggestions.value = cities;
+    showSuggestions.value = cities.length > 0;
+  } catch (error) {
+    suggestions.value = [];
+    showSuggestions.value = false;
+  }
+};
+
+// When a suggestion is selected
+const selectSuggestion = async (city) => {
+  query.value = city.name;
+  showSuggestions.value = false;
+  
+  try {
+    const data = await useWeather(city.name);
+    // Check if this city is already in the list (by id or name)
+    const exists = searchedCitiesWeather.value.some(
+      c => c.id === data.id || c.name.toLowerCase() === data.name.toLowerCase()
+    );
+    if (!exists) {
+      searchedCitiesWeather.value.push(data);
+    }
+    console.log("Selected city weather data:", data);
+  } catch (error) {
+    // Add an error card
+    searchedCitiesWeather.value.push({
+      name: city.name,
+      error: true
+    });
+    console.error("Error fetching selected city weather:", error);
+  }
+};
+
+// Handle keyboard navigation in the dropdown
+const onInputKeydown = (event) => {
+  if (event.key === "Enter" && suggestions.value.length === 1) {
+    selectSuggestion(suggestions.value[0]);
+  }
+};
+
+// Debounced version to avoid excessive API calls
+const debouncedFetchCitySuggestions = debounce(fetchCitySuggestions, 500);
+
+// Watch the query and fetch suggestions as user types
+watch(query, (newVal) => {
+  debouncedFetchCitySuggestions(newVal);
 });
+
 
 </script>
 
@@ -74,28 +136,57 @@ watchEffect(() => {
         <p>Humidity: {{ capeTownWeatherData.main.humidity }}%</p>
         <p>Wind Speed: {{ capeTownWeatherData.wind.speed }} m/s</p>
       </div>
-      <input
-        type="text"
-        v-model="query"
-        @keypress="search"
-        placeholder="Search Weather..."
-      />
+      <div style="position: relative;">
+        <input
+          type="text"
+          v-model="query"
+          placeholder="Search Weather..."
+          @keydown="onInputKeydown"
+          @focus="showSuggestions = suggestions.length > 0"
+          @blur="setTimeout(() => showSuggestions = false, 100)"
+        />
+        <ul v-if="showSuggestions && suggestions.length" class="autocomplete-list">
+          <li
+            v-for="city in suggestions"
+            :key="city.id || city.name"
+            @mousedown.prevent="selectSuggestion(city)"
+            class="autocomplete-item"
+          >
+            {{ city.name }}{{ city.country ? `, ${city.country}` : '' }}
+          </li>
+        </ul>
+      </div>
   
     </div>
-    <div class="card-container">
-        <div v-if="filteredData.length != 0" class="weather-card">
-          <h1>{{ filteredData.name }}</h1>
-          <p>Temperature: {{ filteredData.main.temp }}°C</p>
-          <p>Description: {{ filteredData.weather[0].description }}</p>
-          <p>Humidity: {{ filteredData.main.humidity }}%</p>
-          <p>Wind Speed: {{ filteredData.wind.speed }} m/s</p>
-        </div>
+    <div class="row">
+      <div class="col-6">
+        <div class="card-container">
+      <!-- Render a card for each searched city -->
+      <div
+        v-for="city in searchedCitiesWeather"
+        :key="city.id || city.name"
+        class="weather-card"
+      >
+        <template v-if="!city.error && city.main">
+          <h1>{{ city.name }}</h1>
+          <p>Temperature: {{ city.main?.temp }}°C</p>
+          <p>Description: {{ city.weather?.[0]?.description }}</p>
+          <p>Humidity: {{ city.main?.humidity }}%</p>
+          <p>Wind Speed: {{ city.wind?.speed }} m/s</p>
+        </template>
+        <template v-else>
+          <p>No weather data found for "{{ city.name }}"</p>
+        </template>
       </div>
+    </div>
+      </div>
+    </div>
+
   </div>
 </template>
 <style scoped>
 .card-container {
-  color: white;
+  color:black;
   position: relative;
   font-family: sans-serif;
 }
@@ -136,4 +227,26 @@ watchEffect(() => {
   width: 20rem;
   padding: 1.5rem;
 }
+.autocomplete-list {
+  position: absolute;
+  background: white;
+  color: black;
+  width: 100%;
+  border: 1px solid #ccc;
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 0.25rem;
+}
+.autocomplete-item {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+.autocomplete-item:hover {
+  background: #eee;
+}
 </style>
+
